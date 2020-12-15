@@ -1,3 +1,4 @@
+
 import os
 import zipfile
 import tensorflow as tf
@@ -82,7 +83,7 @@ labels = ['XR_ELBOW','XR_FINGER','XR_FOREARM','XR_HAND','XR_HUMERUS','XR_SHOULDE
 # print(f"Weight for class weight_for_num_XR_HUMERUS: {weight_for_num_XR_HUMERUS:.2f}")
 # print(f"Weight for class weight_for_num_XR_SHOULDER: {weight_for_num_XR_SHOULDER:.2f}")
 # print(f"Weight for class weight_for_num_XR_WRIST: {weight_for_num_XR_WRIST:.2f}")
-
+from tensorflow.keras.applications import DenseNet121
 #normalization
 with strategy.scope():
     def H(inputs, num_filters, dropout_rate):
@@ -119,8 +120,8 @@ with strategy.scope():
 
 
     input_shape = (224, 224, 3)
-    num_blocks = 4
-    num_layers_per_block = 4
+    num_blocks = 3
+    num_layers_per_block = 5
     growth_rate = 16
     dropout_rate = 0
     compress_factor = 0.5
@@ -136,8 +137,18 @@ with strategy.scope():
         x, num_filters = dense_block(x, num_layers_per_block, num_filters, growth_rate, dropout_rate)
         x = transition(x, num_filters, compress_factor, dropout_rate)
 
-    x = tf.keras.layers.GlobalAveragePooling2D()(x)
-    x = tf.keras.layers.Dense(7)(x)  # Num Classes for CIFAR-10
+    # x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    x = tf.keras.layers.Flatten()(x)
+    # x = tf.keras.layers.Dense(512, activation='relu')(x)
+    # x = tf.keras.layers.BatchNormalization()(x)
+    # x = tf.keras.layers.Dense(7)(x)  # Num Classes for CIFAR-10
+    # x = tf.keras.layers.BatchNormalization()(x)
+    # x = Dropout(0.5)(x)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    x = tf.keras.layers.Dense(256, activation='relu')(x)
+    # x = tf.keras.layers.BatchNormalization()(x)
+    # x = Dropout(0.5)(x)
+    x = tf.keras.layers.Dense(7)(x)
     outputs = tf.keras.layers.Activation('softmax')(x)
 
     model = tf.keras.models.Model(inputs, outputs)
@@ -163,15 +174,27 @@ with strategy.scope():
     #     tf.keras.layers.Dense(512, activation='relu'),
     #     tf.keras.layers.Dense(7, activation='softmax')
     # ])
+    # model = DenseNet121(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    #
+    # x = model_d.output
+    #
+    # x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    # x = tf.keras.layers.BatchNormalization()(x)
+    # # x = Dropout(0.5)(x)
+    # x = tf.keras.layers.Dense(1024, activation='relu')(x)
+    # x = tf.keras.layers.Dense(512, activation='relu')(x)
+    # x = tf.keras.layers.BatchNormalization()(x)
+    # x = Dropout(0.5)(x)
 
+    # preds = Dense(8, activation='softmax')(x)  # FC-layer
 
 
     model.summary()
     # SparseCategoricalCrossentropy(from_logits=True)
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss',patience=3, mode='min')
     model.compile(loss='categorical_crossentropy',
-                  optimizer=tf.keras.optimizers.Adam(lr=0.001),
-                  metrics=['accuracy', tf.keras.metrics.AUC(), tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
+                  optimizer=tf.keras.optimizers.Adam(lr=0.0008),
+                  metrics=['categorical_accuracy', tf.keras.metrics.AUC(), tf.keras.metrics.Precision(), tf.keras.metrics.Recall()])
     # model.compile(optimizer=tf.keras.optimizers.Adam(lr=0.001),
     #               loss='sparse_categorical_crossentropy',
     #               metrics=['accuracy'])
@@ -193,7 +216,7 @@ def norm(img):
 def equalization(img):
     # some images are just one color, so they gerenate a divide by zero error
     #     so return original image if the min and max values are the same
-    print("image shape",img.shape)
+    # print("image shape",img.shape)
     if (np.max(img) == np.min(img) ):
         return img
     # Equalization
@@ -218,7 +241,7 @@ def method(img):
 # data during training by applying random lateral inversions and
 # rotations of up to 30 degree
 train_datagen = ImageDataGenerator(
-# preprocessing_function=method,
+# preprocessing_function=equalization,
     rescale=1. / 255,
     # rotation_range=10,
     # zoom_range=0.1,
@@ -235,7 +258,7 @@ train_datagen = ImageDataGenerator(
 #
 
 test_datagen = ImageDataGenerator(rescale=1. / 255,
-                    # preprocessing_function=method,
+                    # preprocessing_function=equalization,
                   # horizontal_flip = False,
                   # zoom_range = 0.0,
                     shear_range=0.3,
@@ -334,7 +357,7 @@ STEP_SIZE_VALID=math.ceil(validation_generator.n / validation_generator.batch_si
 history = model.fit(
     train_generator,
     steps_per_epoch=(STEP_SIZE_TRAIN),  # 2000 images = batch_size * steps
-    epochs=100,
+    epochs=50,
     validation_data=validation_generator,
     validation_steps=(STEP_SIZE_VALID),  # 1000 images = batch_size * steps
     verbose=2,workers=1,use_multiprocessing=False)
@@ -371,4 +394,39 @@ print(classification_report(validation_generator.classes, y_pred, target_names=l
 print("Confusion Matrix for Train Set:\n========================================")
 train_generator.reset()
 Y_pred_T = model.predict_generator(train_generator, (train_generator.samples // batch_size+1))
+# Y_pred_T = model.predict(train_generator, batch_size= batch_size)
+y_pred_T = np.argmax(Y_pred_T, axis=1)
+cf_matrix_T = confusion_matrix(train_generator.classes, y_pred_T)
+print(cf_matrix_T)
+import seaborn as sns
+plt.figure()
+sns_plot_T= sns.heatmap(cf_matrix_T, annot=True,fmt='.2%', cmap='Blues')
+fig_T = sns_plot_T.get_figure()
+fig_T.savefig('/tmp/pycharm_project_27/DeepLearning/Intern/confusionMatrixForTrain_new.png', dpi=400)
+print('Classification Report')
+print(classification_report(train_generator.classes, y_pred_T, target_names=labels))
+
+import matplotlib.image  as mpimg
+
+plt.figure()
+#-----------------------------------------------------------
+# Retrieve a list of list results on training and test data
+# sets for each training epoch
+#-----------------------------------------------------------
+acc=history.history['accuracy']
+val_acc=history.history['val_accuracy']
+loss=history.history['loss']
+val_loss=history.history['val_loss']
+
+epochs=range(len(acc)) # Get number of epochs
+
+# ------------------------------------------------
+# Plot training and validation accuracy per epoch
+# ------------------------------------------------
+plt.figure()
+plt.plot(epochs, acc, 'r', "Training Accuracy")
+plt.plot(epochs, val_acc, 'b', "Validation Accuracy")
+plt.title('Training and validation accuracy')
+# plt.legend()
+plt.savefig('/tmp/pycharm_project_27/DeepLearning/Intern/losses_new.png')
 
