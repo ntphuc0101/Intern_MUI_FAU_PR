@@ -3,9 +3,6 @@
 
 > 1 Pattern Recognition Lab, Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU), Erlangen, Germany.
 
-> 2 Erlangen Graduate School in Advanced Optical Technologies (SAOT),Friedrich-Alexander-Universität Erlangen-Nürnberg (FAU), Erlangen, Germany.
-
-> 3 Siemens Healthcare GmbH, Forchheim, Germany
 
 ## Motivation
 
@@ -16,3 +13,8 @@
 ### Research objective
 
 Development of a classification algorithm that 1) infers the type of anatomy (and 2) the viewing direction) from a 2D X-ray image. 
+
+
+### Development of a classification algorithm that infers the type of anatomy (and 2) the viewing direction) from a 2D X-ray image.
+In this project, I implement different architectures of machine learning models such as Densenet, Pre-Trained Densnet Models on imageNet and pre-trained vgg16 models on imageNet successfully.
+The result of classification is really good since I get the accuracy- over 90 percentages
